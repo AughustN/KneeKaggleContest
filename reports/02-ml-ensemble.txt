@@ -1,0 +1,35 @@
+
+# LOO-CV on gold-58: rules vs ML vs ensemble
+label               rule     ml    ens  best
+ACL                0.879  0.645  0.880  rule
+MCL                0.890  0.347  0.832  rule
+Medial Meniscus    0.907  0.689  0.946  rule
+Lateral Meniscus   0.858  0.615  0.858  rule
+Medial OA          0.779  0.758  0.873  rule
+Lateral OA         0.766  0.584  0.803  rule
+PF OA              0.694  0.524  0.682  rule
+Effusion           0.709  0.564  0.668  rule
+Synovitis          0.695  0.544  0.710  rule
+Baker's            0.837  0.444  0.822  rule
+Contusion          0.731  0.552  0.723  rule
+Fracture           0.747  0.593  0.760  rule
+
+macro: rule=0.791  ml=0.571  ens=0.796
+
+per-label selection (used for pseudo-labeling):
+label              selected
+ACL                    rule
+MCL                    rule
+Medial Meniscus         ens
+Lateral Meniscus       rule
+Medial OA               ens
+Lateral OA              ens
+PF OA                  rule
+Effusion               rule
+Synovitis               ens
+Baker's                rule
+Contusion              rule
+Fracture                ens
+
+ML LOO AUC by language of the gold studies (rules cover all langs):
+note: ml below ~0.65 everywhere because n=58; rules are the model

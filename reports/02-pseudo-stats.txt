@@ -1,0 +1,20 @@
+unlabeled studies: 4349
+
+label             >=.75 <=.25  masked  p_pos
+ACL                 536  3754      59   0.12
+MCL                 220  4102      27   0.05
+Medial Meniscus    1667  1377    1305   0.55
+Lateral Meniscus    718  3480     151   0.17
+Medial OA           686   335    3328   0.67
+Lateral OA          503  1013    2833   0.33
+PF OA              1055  3122     172   0.25
+Effusion           2025  1463     861   0.58
+Synovitis           958   441    2950   0.68
+Baker's             949  3380      20   0.22
+Contusion           757  3534      58   0.18
+Fracture            398   633    3318   0.39
+
+gold-58 prevalence for comparison (labeled positives/58):
+  ACL=0.41, MCL=0.16, Medial Meniscus=0.45, Lateral Meniscus=0.40, Medial OA=0.26, Lateral OA=0.19, PF OA=0.36, Effusion=0.60, Synovitis=0.47, Baker's=0.21, Contusion=0.33, Fracture=0.31
+
+wrote E:\KneeAbnormal\data\pseudo_labels.csv
