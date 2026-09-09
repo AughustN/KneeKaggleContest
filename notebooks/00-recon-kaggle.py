@@ -56,8 +56,10 @@ def find_data_dir():
 
 
 def main():
-    random.seed(0)
-    np.random.seed(0)
+    from knee.config import get as cfg
+    seed = cfg("seed", default=42)
+    random.seed(seed)
+    np.random.seed(seed)
     data_dir = find_data_dir()
     print("data dir:", data_dir)
     train_series = pd.read_csv(os.path.join(data_dir, "train_series.csv"))

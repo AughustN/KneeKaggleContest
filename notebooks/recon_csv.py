@@ -18,13 +18,12 @@ from collections import Counter
 import numpy as np
 import pandas as pd
 
-DATA_DIR = r"E:\KneeAbnormal"
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from knee.config import get as cfg  # noqa: E402
+from knee.constants import LABELS  # noqa: E402
+
+DATA_DIR = cfg("paths", "local_data")
 OUT_DIR = os.path.join(DATA_DIR, "reports")
-LABELS = [
-    "ACL", "MCL", "Medial Meniscus", "Lateral Meniscus",
-    "Medial OA", "Lateral OA", "PF OA",
-    "Effusion", "Synovitis", "Baker's", "Contusion", "Fracture",
-]
 
 
 def main() -> int:

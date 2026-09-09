@@ -1,0 +1,58 @@
+seed: 42
+
+paths:
+  local_data: "E:\\KneeAbnormal"
+  kaggle_input: "/kaggle/input"
+  kaggle_working: "/kaggle/working"
+  output_subdir: "shards"
+
+preprocessing:
+  img_size: 224
+  num_slices: 8
+  max_series: 3
+  shards_per_file: 2000
+  n_workers: 4
+  chunksize: 8
+  percentile_low: 1.0
+  percentile_high: 99.5
+  series_priority:
+    - ["Sagittal", 1]
+    - ["Coronal", 1]
+    - ["Axial", 1]
+    - ["Sagittal", 0]
+    - ["Coronal", 0]
+    - ["Axial", 0]
+
+labels:
+  - "ACL"
+  - "MCL"
+  - "Medial Meniscus"
+  - "Lateral Meniscus"
+  - "Medial OA"
+  - "Lateral OA"
+  - "PF OA"
+  - "Effusion"
+  - "Synovitis"
+  - "Baker's"
+  - "Contusion"
+  - "Fracture"
+
+ml:
+  tfidf_analyzer: "char_wb"
+  tfidf_ngram_range: [2, 5]
+  tfidf_min_df: 1
+  tfidf_max_features: 200000
+  tfidf_sublinear_tf: true
+  lr_C: 2.0
+  lr_max_iter: 3000
+  lr_class_weight: "balanced"
+
+pseudo_labels:
+  positive_threshold: 0.75
+  negative_threshold: 0.25
+  ensemble_labels:
+    - "Medial Meniscus"
+    - "Medial OA"
+    - "Lateral OA"
+    - "Synovitis"
+    - "Fracture"

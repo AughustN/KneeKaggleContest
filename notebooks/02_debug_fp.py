@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
+from knee.config import get as cfg  # noqa: E402
 from knee.constants import LABELS  # noqa: E402
 from knee.text_extractor import (  # noqa: E402
     ACL_ANCHOR, ACL_INJURY, BAKER, CONTUSION, CONTUSION_CONFIRM,
@@ -21,7 +21,7 @@ from knee.text_extractor import (  # noqa: E402
     normalize, sentence_polarity,
 )
 
-DATA = r"E:\KneeAbnormal"
+DATA = cfg("paths", "local_data")
 
 
 def get_gold():

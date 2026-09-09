@@ -30,23 +30,28 @@ for p in ("/kaggle/working", _SRC):
         if p not in sys.path:
             sys.path.insert(0, p)
 
+from knee.config import get as cfg  # noqa: E402
 from knee.preprocess import (  # noqa: E402
     IMG_SIZE, MAX_SERIES, NUM_SLICES, find_data_dir, process_study,
     select_series,
 )
 
-SHARDS_PER_FILE = 2000
-OUT_DIR = "/kaggle/working/shards"  # local fallback: ./shards
-N_WORKERS = 4
+SHARDS_PER_FILE = cfg("preprocessing", "shards_per_file", default=2000)
+N_WORKERS = cfg("preprocessing", "n_workers", default=4)
+CHUNKSIZE = cfg("preprocessing", "chunksize", default=8)
 
 DATA_DIR = os.environ.get("KNEE_DATA_DIR", "")
 if not DATA_DIR:
     try:
-        DATA_DIR = find_data_dir("/kaggle/input")
+        DATA_DIR = find_data_dir()
     except FileNotFoundError:
         DATA_DIR = find_data_dir(".") if os.path.exists("train.csv") else "."
 
-OUT_DIR = os.environ.get("KNEE_OUT_DIR", OUT_DIR)
+OUT_DIR = os.environ.get(
+    "KNEE_OUT_DIR",
+    os.path.join(cfg("paths", "kaggle_working", default="/kaggle/working"),
+                 cfg("paths", "output_subdir", default="shards"))
+)
 SERIES_ROOT = os.path.join(DATA_DIR, "train_series")
 
 
@@ -84,7 +89,7 @@ def main():
 
     t0 = time.time()
     with Pool(N_WORKERS) as pool:
-        for uid, ok, tensor in pool.imap(process_study, tasks, chunksize=8):
+        for uid, ok, tensor in pool.imap(process_study, tasks, chunksize=CHUNKSIZE):
             if not ok or tensor is None:
                 fails += 1
                 tensor = np.zeros((MAX_SERIES, NUM_SLICES, IMG_SIZE, IMG_SIZE), np.uint8)

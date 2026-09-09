@@ -22,24 +22,28 @@ from sklearn.metrics import roc_auc_score
 from sklearn.pipeline import make_pipeline
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
+from knee.config import get as cfg  # noqa: E402
 from knee.constants import LABELS  # noqa: E402
 from knee.text_extractor import extract_frame, normalize  # noqa: E402
 
-DATA = r"E:\KneeAbnormal"
+DATA = cfg("paths", "local_data")
 OUT = os.path.join(DATA, "reports", "02-ml-ensemble.txt")
 
 
 def make_clf() -> "Pipeline":
     return make_pipeline(
         TfidfVectorizer(
-            analyzer="char_wb",
-            ngram_range=(2, 5),
-            min_df=1,
-            max_features=200000,
-            sublinear_tf=True,
+            analyzer=cfg("ml", "tfidf_analyzer", default="char_wb"),
+            ngram_range=tuple(cfg("ml", "tfidf_ngram_range", default=[2, 5])),
+            min_df=cfg("ml", "tfidf_min_df", default=1),
+            max_features=cfg("ml", "tfidf_max_features", default=200000),
+            sublinear_tf=cfg("ml", "tfidf_sublinear_tf", default=True),
         ),
-        LogisticRegression(C=2.0, max_iter=3000, class_weight="balanced"),
+        LogisticRegression(
+            C=cfg("ml", "lr_C", default=2.0),
+            max_iter=cfg("ml", "lr_max_iter", default=3000),
+            class_weight=cfg("ml", "lr_class_weight", default="balanced"),
+        ),
     )
 
 

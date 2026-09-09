@@ -1,8 +1,8 @@
 """Regenerate notebooks/10-preprocess.ipynb (self-contained Kaggle notebook).
 
-Embeds src/knee/preprocess.py VERBATIM (json-escaped) so the notebook can never
-drift from the repo. The notebook writes the package itself on Kaggle — no
-repo upload needed; only the competition dataset must be attached.
+Embeds src/knee/preprocess.py and config.yaml VERBATIM (json-escaped) so the
+notebook can never drift from the repo. The notebook writes the package itself
+on Kaggle — no repo upload needed; only the competition dataset must be attached.
 
 Usage: python notebooks/build_preprocess_ipynb.py
 """
@@ -16,6 +16,14 @@ NB_PATH = os.path.join(HERE, "10-preprocess.ipynb")
 
 payload = open(
     os.path.join(REPO, "src", "knee", "preprocess.py"), encoding="utf-8"
+).read()
+
+config_payload = open(
+    os.path.join(REPO, "config.yaml"), encoding="utf-8"
+).read()
+
+config_py_payload = open(
+    os.path.join(REPO, "src", "knee", "config.py"), encoding="utf-8"
 ).read()
 
 CELL_PACKAGE = """import os
@@ -37,7 +45,18 @@ with open("/kaggle/working/knee/constants.py", "w", encoding="utf-8") as f:
         ']\\n\\n'
         'NUM_LABELS = len(LABELS)  # 12\\n'
     )
-print("package skeleton written")
+
+# Write config.yaml (embedded from repo root)
+_CONFIG_YAML = {config_yaml!r}
+with open("/kaggle/working/config.yaml", "w", encoding="utf-8") as f:
+    f.write(_CONFIG_YAML)
+
+# Write knee/config.py (embedded from repo)
+_CONFIG_PY = {config_py!r}
+with open("/kaggle/working/knee/config.py", "w", encoding="utf-8") as f:
+    f.write(_CONFIG_PY)
+
+print("package skeleton + config written")
 """
 
 CELL_PAYLOAD = """# knee/preprocess.py source — embedded VERBATIM from repo src/knee/preprocess.py.
@@ -62,18 +81,21 @@ import pandas as pd
 
 sys.path.insert(0, "/kaggle/working")
 
+from knee.config import get as cfg
 from knee.preprocess import (
     IMG_SIZE, MAX_SERIES, NUM_SLICES, find_data_dir, process_study, select_series,
 )
 
-SHARDS_PER_FILE = 2000
-OUT_DIR = "/kaggle/working/shards"
-N_WORKERS = 4
+SHARDS_PER_FILE = cfg("preprocessing", "shards_per_file", default=2000)
+N_WORKERS = cfg("preprocessing", "n_workers", default=4)
+CHUNKSIZE = cfg("preprocessing", "chunksize", default=8)
 
-DATA_DIR = find_data_dir("/kaggle/input")
+DATA_DIR = find_data_dir()
 SERIES_ROOT = os.path.join(DATA_DIR, "train_series")
 print("data dir:", DATA_DIR)
 
+OUT_DIR = os.path.join(cfg("paths", "kaggle_working", default="/kaggle/working"),
+                       cfg("paths", "output_subdir", default="shards"))
 os.makedirs(OUT_DIR, exist_ok=True)
 
 series_meta = pd.read_csv(os.path.join(DATA_DIR, "train_series.csv"))
@@ -112,7 +134,7 @@ buf = {}
 
 t0 = time.time()
 with Pool(N_WORKERS) as pool:
-    for uid, ok, tensor in pool.imap(process_study, tasks, chunksize=8):
+    for uid, ok, tensor in pool.imap(process_study, tasks, chunksize=CHUNKSIZE):
         if not ok or tensor is None:
             fails += 1
             tensor = np.zeros((MAX_SERIES, NUM_SLICES, IMG_SIZE, IMG_SIZE), np.uint8)
@@ -193,7 +215,7 @@ nb = {
             "ImagePositionPatient[2], 224x224 uint8, per-volume percentile normalization.\n"
             "~4.7 GB total, ~1.5-2h with 4 workers."
         ),
-        code(CELL_PACKAGE),
+        code(CELL_PACKAGE.format(config_yaml=config_payload, config_py=config_py_payload)),
         code(CELL_PAYLOAD.format(payload=payload)),
         code(CELL_RUN),
         md(

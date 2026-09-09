@@ -25,21 +25,43 @@ try:
 except ImportError as e:  # pragma: no cover
     raise ImportError("pydicom required") from e
 
-IMG_SIZE = 224
-NUM_SLICES = 8
-MAX_SERIES = 3
+# --- load from config.yaml (with hardcoded fallbacks for Kaggle/embedded use) ---
+try:
+    from knee.config import get as cfg
+    IMG_SIZE = cfg("preprocessing", "img_size", default=224)
+    NUM_SLICES = cfg("preprocessing", "num_slices", default=8)
+    MAX_SERIES = cfg("preprocessing", "max_series", default=3)
+    P_LO = cfg("preprocessing", "percentile_low", default=1.0)
+    P_HI = cfg("preprocessing", "percentile_high", default=99.5)
+    _SERIES_PRIORITY = [
+        tuple(p) for p in cfg("preprocessing", "series_priority", default=[
+            ["Sagittal", 1], ["Coronal", 1], ["Axial", 1],
+            ["Sagittal", 0], ["Coronal", 0], ["Axial", 0],
+        ])
+    ]
+except Exception:
+    IMG_SIZE = 224
+    NUM_SLICES = 8
+    MAX_SERIES = 3
+    P_LO = 1.0
+    P_HI = 99.5
+    _SERIES_PRIORITY = [
+        ("Sagittal", 1), ("Coronal", 1), ("Axial", 1),
+        ("Sagittal", 0), ("Coronal", 0), ("Axial", 0),
+    ]
 
-_SERIES_PRIORITY = [
-    ("Sagittal", 1), ("Coronal", 1), ("Axial", 1),
-    ("Sagittal", 0), ("Coronal", 0), ("Axial", 0),
-]
 
-
-def find_data_dir(base: str = "/kaggle/input") -> str:
+def find_data_dir(base: str = None) -> str:
     """Locate the competition dir; handles nested /kaggle/input/competitions/<slug>/.
 
     Bounded-depth walk; prunes train_series/test_series DICOM trees.
     """
+    if base is None:
+        try:
+            from knee.config import get as cfg
+            base = cfg("paths", "kaggle_input", default="/kaggle/input")
+        except Exception:
+            base = "/kaggle/input"
     if not os.path.isdir(base):
         raise FileNotFoundError(f"{base} does not exist — attach the competition dataset")
     for root, dirs, files in os.walk(base):
@@ -79,19 +101,84 @@ def select_series(study_series_rows, max_series: int = MAX_SERIES) -> List[str]:
     return chosen
 
 
-def _slice_sort_key(path: str) -> Tuple[float, str]:
-    """Header-only read for position; ~1ms. Falls back to filename."""
+def _read_slice_position(path: str) -> float:
+    """Header-only read for physical Z position; ~1ms. Falls back to 0.0."""
     try:
         ds = pydicom.dcmread(path, stop_before_pixels=True, force=True)
         ipp = getattr(ds, "ImagePositionPatient", None)
         if ipp is not None and len(ipp) >= 3:
-            return (float(ipp[2]), path)
+            return float(ipp[2])
         num = getattr(ds, "InstanceNumber", None)
         if num is not None:
-            return (float(num), path)
+            return float(num)
     except Exception:
         pass
-    return (0.0, path)
+    return 0.0
+
+
+def _slice_sort_key(path: str) -> Tuple[float, str]:
+    """Header-only read for position; ~1ms. Falls back to filename."""
+    return (_read_slice_position(path), path)
+
+
+def _select_indices_by_position(
+    n: int, num_slices: int, positions: List[float]
+) -> List[int]:
+    """Select slice indices with uniform physical spacing.
+
+    Samples evenly across the physical Z-axis span instead of file-count,
+    giving better anatomical coverage when slices are non-uniformly spaced.
+
+    Falls back to index-based uniform sampling when positions are unavailable
+    (all zeros) or when the series has fewer slices than requested.
+    """
+    if n <= num_slices:
+        return list(range(n))
+
+    # check if physical positions are meaningful
+    span = positions[-1] - positions[0]
+    if abs(span) < 1e-6:
+        # no physical spacing info — fall back to index-based
+        return sorted(set(int(i) for i in np.linspace(0, n - 1, num_slices)))
+
+    # sample uniformly across physical span
+    start, stop = positions[0], positions[-1]
+    targets = np.linspace(start, stop, num_slices)
+
+    idx = []
+    j = 0
+    for t in targets:
+        # advance pointer to nearest unchosen slice
+        best = j
+        best_dist = abs(positions[j] - t)
+        while j < n - 1:
+            d = abs(positions[j + 1] - t)
+            if d < best_dist:
+                j += 1
+                best = j
+                best_dist = d
+            else:
+                break
+        if best not in idx:
+            idx.append(best)
+        else:
+            # if duplicate, try neighbours
+            for offset in range(1, n):
+                for cand in (best - offset, best + offset):
+                    if 0 <= cand < n and cand not in idx:
+                        idx.append(cand)
+                        break
+                if len(idx) > len(targets):
+                    break
+
+    # pad if dedup shrank below num_slices
+    j = 0
+    while len(idx) < num_slices and j < n:
+        if j not in idx:
+            idx.append(j)
+        j += 1
+
+    return sorted(idx[:num_slices])
 
 
 _DCM_RE = re.compile(r"\.dcm$", re.IGNORECASE)
@@ -105,7 +192,7 @@ def read_series(
 ) -> Optional[np.ndarray]:
     """Read one DICOM series -> (num_slices, img_size, img_size) uint8.
 
-    Efficiency: header-scans ALL files (cheap) to sort + choose sample
+    Efficiency: header-scans ALL files ONCE (cheap) to sort + collect physical
     positions, then pixel-decodes ONLY the sampled slices.
 
     Returns None on unreadable/empty series (caller zero-fills).
@@ -118,24 +205,22 @@ def read_series(
     if not files:
         return None
 
-    files.sort(key=_slice_sort_key)
-    n = len(files)
-    if n <= num_slices:
-        idx = list(range(n))
-    else:
-        idx = sorted(set(int(i) for i in np.linspace(0, n - 1, num_slices)))
-        # ensure exactly num_slices entries (pad by repeating neighbors if dedup shrank)
-        j = 0
-        while len(idx) < num_slices and j < n:
-            if j not in idx:
-                idx.append(j)
-            j += 1
-        idx = sorted(idx[:num_slices])
+    # --- single-pass header scan: read position + sort ---
+    entries = []  # [(position, path)]
+    for p in files:
+        entries.append((_read_slice_position(p), p))
+    entries.sort(key=lambda e: e[0])
 
+    n = len(entries)
+    positions = [e[0] for e in entries]
+    sorted_files = [e[1] for e in entries]
+    idx = _select_indices_by_position(n, num_slices, positions)
+
+    # --- pixel-decode only the selected slices ---
     slices = []
     for i in idx:
         try:
-            ds = pydicom.dcmread(files[i], force=True)
+            ds = pydicom.dcmread(sorted_files[i], force=True)
             img = ds.pixel_array.astype(np.float32)
             slope = float(getattr(ds, "RescaleSlope", 1.0) or 1.0)
             inter = float(getattr(ds, "RescaleIntercept", 0.0) or 0.0)
@@ -157,7 +242,7 @@ def read_series(
     finite = vol[np.isfinite(vol)]
     if finite.size == 0:
         return None
-    p_lo, p_hi = np.percentile(finite, [1.0, 99.5])
+    p_lo, p_hi = np.percentile(finite, [P_LO, P_HI])
     if p_hi <= p_lo:
         p_hi = p_lo + 1e-6
     vol = np.clip(vol, p_lo, p_hi)

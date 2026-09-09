@@ -12,11 +12,11 @@ import pandas as pd
 from sklearn.metrics import roc_auc_score
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
-
+from knee.config import get as cfg  # noqa: E402
 from knee.constants import LABELS  # noqa: E402
 from knee.text_extractor import extract_frame, normalize  # noqa: E402
 
-DATA = r"E:\KneeAbnormal"
+DATA = cfg("paths", "local_data")
 OUT = os.path.join(DATA, "reports", "02-extractor-errors.txt")
 
 

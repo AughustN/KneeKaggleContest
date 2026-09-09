@@ -12,13 +12,12 @@ import unicodedata
 import numpy as np
 import pandas as pd
 
-DATA = r"E:\KneeAbnormal"
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+from knee.config import get as cfg  # noqa: E402
+from knee.constants import LABELS  # noqa: E402
+
+DATA = cfg("paths", "local_data")
 OUT = os.path.join(DATA, "reports", "02-gold-58-dump.txt")
-LABELS = [
-    "ACL", "MCL", "Medial Meniscus", "Lateral Meniscus",
-    "Medial OA", "Lateral OA", "PF OA",
-    "Effusion", "Synovitis", "Baker's", "Contusion", "Fracture",
-]
 
 LANG_HINTS = {
     "english": ["meniscus", "effusion", "tear", "findings", "no evidence", "mri knee"],
