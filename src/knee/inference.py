@@ -37,8 +37,10 @@ def load_checkpoint(path: str, device: str = None) -> Tuple[nn.Module, dict]:
     cfg = ckpt.get("config", {})
 
     # Build model arch — import here so device is known
+    # KneeModel(backbone=None, num_labels=12): backbone auto-resolved via
+    # knee.dinov2 or torch.hub; config dict is only used by dataset.prep_tensor.
     from knee.model import KneeModel
-    model = KneeModel(cfg=cfg)
+    model = KneeModel()
     model.load_state_dict(ckpt["model_state"], strict=True)
     model.to(device)
     model.eval()
